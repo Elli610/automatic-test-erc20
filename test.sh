@@ -22,6 +22,10 @@ if [ ! -f "$OUTPUT_CSV_FILE" ]; then
     echo "Repository URL,Status" > "$OUTPUT_CSV_FILE"
 fi
 
+# display the CSV file
+echo "CSV file contents:"
+cat "$CSV_FILE"
+
 # Loop through each repository URL in the CSV
 while IFS= read -r REPO_URL; do
 
@@ -29,11 +33,9 @@ while IFS= read -r REPO_URL; do
     if [ ! -d "$SRC_DIR" ]; then
         mkdir "$SRC_DIR"
     fi
-
+    echo "-----------git clone "$REPO_URL" "$REPO_DIR"-----------"
     # Clone the repository into ./src/erc20Basic if it doesn't exist
-    if [ ! -d "$REPO_DIR" ]; then
-        git clone "$REPO_URL" "$REPO_DIR"
-    fi
+    git clone "$REPO_URL" "$REPO_DIR"
 
     # Create the save directory if it doesn't exist
     if [ ! -d "$SAVE_DIR" ]; then
@@ -44,7 +46,7 @@ while IFS= read -r REPO_URL; do
     rsync -av "$REPO_DIR/" "$SAVE_DIR/"
 
     # Navigate to the cloned directory
-    cd "$REPO_DIR" || { echo "Repository directory not found!"; exit 1; }
+    cd "$REPO_DIR" || { echo "Repository directory not found: $REPO_DIR"; exit 1; }
 
     # Collect all .sol files from both the root and contracts folder
     sol_files=$(find . -maxdepth 1 -name "*.sol")
@@ -59,7 +61,7 @@ while IFS= read -r REPO_URL; do
     # Check if any .sol files were found
     if [ -z "$sol_files" ]; then
         echo "No Solidity (.sol) files found!"
-        exit 1
+        break
     else
         echo "Solidity files to be tested:"
         echo "$sol_files"
