@@ -5,7 +5,7 @@ REPO_URL="https://github.com/Ghonghito/levelupweb3"
 SRC_DIR="./src"
 REPO_DIR="$SRC_DIR/erc20Basic"
 SAVE_DIR="$SRC_DIR/save"
-TEST_TEMPLATE="./test/save-ERC20-Challenge.t"
+TEST_TEMPLATE="./test/save-ERC20-Challenge.txt"
 TEST_FILE="./test/ERC20-Challenge.t.sol"
 
 # Create the src directory if it doesn't exist
@@ -18,8 +18,13 @@ if [ ! -d "$REPO_DIR" ]; then
     git clone "$REPO_URL" "$REPO_DIR"
 fi
 
-# Copy the cloned repository to ./src/save
-cp -r "$REPO_DIR" "$SAVE_DIR"
+# Create the save directory if it doesn't exist
+if [ ! -d "$SAVE_DIR" ]; then
+    mkdir "$SAVE_DIR"
+fi
+
+# Copy the cloned repository to ./src/save (including .git)
+rsync -av "$REPO_DIR/" "$SAVE_DIR/"
 
 # Navigate to the cloned directory
 cd "$REPO_DIR" || { echo "Repository directory not found!"; exit 1; }
@@ -75,33 +80,45 @@ for sol_file in $sol_files; do
     cp "../../$TEST_TEMPLATE" "../../$TEST_FILE"
 
     # Get the relative path between src and the file to test
-    # relative_path=$(realpath --relative-to="$SRC_DIR" "$sol_file")
-    
-    # Replace the placeholder "__TO_BE_REPLACED__" with the correct path
-    # sed -i "s|__TO_BE_REPLACED__|$relative_path|g" "../../$TEST_FILE"
-
-    # Relative path between ../../test/ERC20-Challenge.t.sol and the file to test
     replacement_string=$(realpath --relative-to="../../$TEST_FILE" "$sol_file")
     echo "Replacing __TO_BE_REPLACED__ with $replacement_string in $TEST_FILE"
+
     # Use sed with the variable
     sed -i.bak "s|__TO_BE_REPLACED__|$replacement_string|g" "../../$TEST_FILE"
 
+    # Run the test and display the output live
+    echo "Running forge test for $sol_file..."
+    cd ../../
 
-    # Run the test
-    output=$(forge test --match-path "$TEST_FILE" 2>&1)
-
-    # Check if the test succeeded
-    if echo "$output" | grep -q "Test result: ok"; then
+    if forge test --match-path "$TEST_FILE"; then
         any_test_succeeded=true
         echo "Test succeeded for $sol_file"
-        echo "true"
     else
         echo "Test failed for $sol_file"
-        echo "$output"
+    fi
+
+    cd src/erc20Basic/
+
+    # Clean up: Remove the test file after the test
+    rm -f "$TEST_FILE" "$TEST_FILE.bak"
+
+    # Remove src/erc20Basic and restore it from src/save (including .git)
+    echo "Removing src/erc20Basic and restoring it from src/save..."
+    rm -rf "$REPO_DIR"
+
+    if any_test_succeeded; then
+        break
     fi
 done
 
-# Remove the content of src directory -> todo
+# Clean
+echo "Cleaning up ..."
+cd ../../
+rm -f "$TEST_FILE"
+rm -f "$TEST_FILE.bak"
+rm -rf "$REPO_DIR"
+rm -rf "$SAVE_DIR"
+forge clean
 
 # Final check if any test succeeded
 if [ "$any_test_succeeded" = true ]; then
