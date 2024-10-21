@@ -45,7 +45,7 @@ while IFS= read -r REPO_URL; do
     if ! git clone "$REPO_URL" "$REPO_DIR"; then
         echo "Failed to clone repository $REPO_URL"
         echo "$REPO_URL,fail (clone error)" >> "$OUTPUT_CSV_FILE"
-        continue
+        break
     fi
 
     # Create the save directory if it doesn't exist
