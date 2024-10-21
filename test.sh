@@ -33,9 +33,20 @@ while IFS= read -r REPO_URL; do
     if [ ! -d "$SRC_DIR" ]; then
         mkdir "$SRC_DIR"
     fi
+
+    # Clean up the old repo directory if it exists
+    if [ -d "$REPO_DIR" ]; then
+        echo "Cleaning up old repository directory..."
+        rm -rf "$REPO_DIR"
+    fi
+
     echo "-----------git clone "$REPO_URL" "$REPO_DIR"-----------"
-    # Clone the repository into ./src/erc20Basic if it doesn't exist
-    git clone "$REPO_URL" "$REPO_DIR"
+    # Clone the repository into ./src/erc20Basic
+    if ! git clone "$REPO_URL" "$REPO_DIR"; then
+        echo "Failed to clone repository $REPO_URL"
+        echo "$REPO_URL,fail (clone error)" >> "$OUTPUT_CSV_FILE"
+        continue
+    fi
 
     # Create the save directory if it doesn't exist
     if [ ! -d "$SAVE_DIR" ]; then
@@ -46,7 +57,11 @@ while IFS= read -r REPO_URL; do
     rsync -av "$REPO_DIR/" "$SAVE_DIR/"
 
     # Navigate to the cloned directory
-    cd "$REPO_DIR" || { echo "Repository directory not found: $REPO_DIR"; exit 1; }
+    if ! cd "$REPO_DIR"; then
+        echo "Repository directory not found: $REPO_DIR"
+        echo "$REPO_URL,fail (directory not found)" >> "$OUTPUT_CSV_FILE"
+        continue
+    fi
 
     # Collect all .sol files from both the root and contracts folder
     sol_files=$(find . -maxdepth 1 -name "*.sol")
@@ -61,7 +76,8 @@ while IFS= read -r REPO_URL; do
     # Check if any .sol files were found
     if [ -z "$sol_files" ]; then
         echo "No Solidity (.sol) files found!"
-        break
+        echo "$REPO_URL,fail (no .sol files)" >> "$OUTPUT_CSV_FILE"
+        continue
     else
         echo "Solidity files to be tested:"
         echo "$sol_files"
@@ -77,7 +93,6 @@ while IFS= read -r REPO_URL; do
     # Function to replace contract name with MyToken
     replace_contract_name() {
         local file_path="$1"
-        # Find contract name with regex and replace it with 'MyToken'
         contract_name=$(grep -Po '(?<=contract\s)(\w+)' "$file_path")
         if [ -z "$contract_name" ]; then
             echo "No contract found in $file_path"
@@ -124,6 +139,7 @@ while IFS= read -r REPO_URL; do
         # Remove src/erc20Basic and restore it from src/save (including .git)
         echo "Removing src/erc20Basic and restoring it from src/save..."
         rm -rf "$REPO_DIR"
+        rsync -av "$SAVE_DIR/" "$REPO_DIR/"
 
         if [ "$any_test_succeeded" = true ]; then
             break
