@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# check if foundry is installed
+if ! command -v forge &> /dev/null; then
+    echo "Foundry is not installed. PLease install it first."
+    exit 1
+fi
+
 # Path to the CSV file containing the repository URLs
 CSV_FILE="repositories.csv"
 
@@ -22,12 +28,26 @@ if [ ! -f "$OUTPUT_CSV_FILE" ]; then
     echo "Repository URL,Status" > "$OUTPUT_CSV_FILE"
 fi
 
+truncate_repo_url() {
+    local repo_url="$1"
+    
+    # Check if the URL is for a specific file, and truncate if necessary
+    if [[ "$repo_url" =~ (https://github\.com/[^/]+/[^/]+) ]]; then
+        echo "${BASH_REMATCH[1]}"
+    else
+        echo "$repo_url"
+    fi
+}
+
 # display the CSV file
 echo "CSV file contents:"
 cat "$CSV_FILE"
 
 # Loop through each repository URL in the CSV
 while IFS= read -r REPO_URL; do
+
+    # Truncate the URL if it's a file URL instead of a repository URL
+    REPO_URL=$(truncate_repo_url "$REPO_URL")
 
     # Create the src directory if it doesn't exist
     if [ ! -d "$SRC_DIR" ]; then
@@ -45,7 +65,7 @@ while IFS= read -r REPO_URL; do
     if ! git clone "$REPO_URL" "$REPO_DIR"; then
         echo "Failed to clone repository $REPO_URL"
         echo "$REPO_URL,fail (clone error)" >> "$OUTPUT_CSV_FILE"
-        break
+        continue
     fi
 
     # Create the save directory if it doesn't exist
@@ -77,17 +97,9 @@ while IFS= read -r REPO_URL; do
     if [ -z "$sol_files" ]; then
         echo "No Solidity (.sol) files found!"
         echo "$REPO_URL,fail (no .sol files)" >> "$OUTPUT_CSV_FILE"
-        continue
     else
         echo "Solidity files to be tested:"
         echo "$sol_files"
-    fi
-
-    # Install Foundry if not already installed
-    if ! command -v forge &> /dev/null; then
-        echo "Foundry is not installed. Installing Foundry..."
-        curl -L https://foundry.paradigm.xyz | bash
-        foundryup
     fi
 
     # Function to replace contract name with MyToken
